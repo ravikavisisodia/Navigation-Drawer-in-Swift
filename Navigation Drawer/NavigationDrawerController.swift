@@ -32,6 +32,7 @@ class NavigationDrawerController: NSObject {
 		return view
 	}
 	
+	private var drawerNavigationDelegate: UINavigationControllerDelegate?
 	let drawer: UIViewController, presentingController: UIViewController
 	let direction: DrawerPresentationDirection
 	init(drawer: UIViewController, presentingController: UIViewController, direction: DrawerPresentationDirection) {
@@ -53,7 +54,7 @@ class NavigationDrawerController: NSObject {
 		self.drawer.endAppearanceTransition()
 		self.drawer.didMove(toParent: self.presentingController)
 		self.drawer.view.layoutIfNeeded()
-
+		
 		UIView.animate(withDuration: 0.4, animations: {
 			drawerContainer.backgroundColor = UIColor.black.withAlphaComponent(0.5)
 			self.drawer.view.frame = CGRect(x: self.actualDirection == .left ? 0 : (f.width - w), y: 0, width: w, height: f.height)
@@ -64,6 +65,9 @@ class NavigationDrawerController: NSObject {
 			let tapGesture = UITapGestureRecognizer(target: self, action: #selector(self.userDidClickDrawerContainer(_:)))
 			tapGesture.delegate = self
 			drawerContainer.gestureRecognizers = [ tapGesture, panGesture ]
+			
+			self.drawerNavigationDelegate = (self.drawer as? UINavigationController)?.delegate
+			(self.drawer as? UINavigationController)?.delegate = self
 		}
 	}
 	
@@ -89,7 +93,50 @@ class NavigationDrawerController: NSObject {
 			self.drawer.removeFromParent()
 			
 			drawerContainer.removeFromSuperview()
+			(self.drawer as? UINavigationController)?.delegate = self.drawerNavigationDelegate
 		}
+	}
+}
+
+extension NavigationDrawerController: UINavigationControllerDelegate {
+	func navigationController(_ navigationController: UINavigationController, willShow viewController: UIViewController, animated: Bool) {
+		if viewController == navigationController.viewControllers.first {
+			let f = self.presentingController.view.frame, w = min(UI_USER_INTERFACE_IDIOM() == .pad ? 420 : 320, f.width - 64)
+			self.drawerContainer.clipsToBounds = self.drawer.view.clipsToBounds
+			self.drawer.view.clipsToBounds = true
+			UIView.animate(withDuration: 0.1, animations: {
+				self.drawer.view.frame = CGRect(x: self.actualDirection == .left ? 0 : (f.width - w), y: 0, width: w, height: f.height)
+			})
+		} else {
+			UIView.animate(withDuration: 0.2, animations: {
+				self.drawer.view.frame = self.presentingController.view.bounds
+			})
+		}
+		self.drawerNavigationDelegate?.navigationController?(navigationController, willShow: viewController, animated: animated)
+	}
+	
+	func navigationController(_ navigationController: UINavigationController, didShow viewController: UIViewController, animated: Bool) {
+		self.drawerNavigationDelegate?.navigationController?(navigationController, didShow: viewController, animated: animated)
+		UIView.animate(withDuration: 0.1, animations: {}) { _ in
+			self.drawer.view.clipsToBounds = self.drawerContainer.clipsToBounds
+			self.drawerContainer.clipsToBounds = false
+		}
+	}
+	
+	func navigationControllerSupportedInterfaceOrientations(_ navigationController: UINavigationController) -> UIInterfaceOrientationMask {
+		return self.drawerNavigationDelegate?.navigationControllerSupportedInterfaceOrientations?(navigationController) ?? .all
+	}
+	
+	func navigationControllerPreferredInterfaceOrientationForPresentation(_ navigationController: UINavigationController) -> UIInterfaceOrientation {
+		return self.drawerNavigationDelegate?.navigationControllerPreferredInterfaceOrientationForPresentation?(navigationController) ?? .unknown
+	}
+	
+	func navigationController(_ navigationController: UINavigationController, interactionControllerFor animationController: UIViewControllerAnimatedTransitioning) -> UIViewControllerInteractiveTransitioning? {
+		return self.drawerNavigationDelegate?.navigationController?(navigationController, interactionControllerFor: animationController)
+	}
+	
+	func navigationController(_ navigationController: UINavigationController, animationControllerFor operation: UINavigationController.Operation, from fromVC: UIViewController, to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+		return self.drawerNavigationDelegate?.navigationController?(navigationController, animationControllerFor: operation, from: fromVC, to: toVC)
 	}
 }
 
